@@ -1,6 +1,7 @@
 #ifndef __MENUSYS_H
 #define __MENUSYS_H
 
+#include <stddef.h>
 #include "include/config.h"
 #include "include/dia.h"
 
@@ -111,6 +112,30 @@ void menuHandleInputMenu();
 void menuHandleInputInfo();
 void menuHandleInputGameMenu();
 void menuHandleInputAppMenu();
+
+void menuGetSelectionSummary(char *source, size_t sourceSize, char *title, size_t titleSize);
+
+#ifdef OPL_EVO
+void menuEvolutionRenderList(int x, int y, int width, int rowHeight, int rows);
+int menuEvolutionRenderCover(int x, int y, int width, int height);
+int menuEvolutionGetDetails(char *startup, size_t startupSize, int *position, int *total);
+void menuEvolutionMoveItem(int direction);
+void menuEvolutionMoveSource(int direction);
+void menuEvolutionMovePage(int direction);
+void menuEvolutionActivate(void);
+void menuEvolutionPrimeConfig(void);
+int menuEvolutionLaunchDirect(void);
+int menuEvolutionPrepareLaunch(void);
+int menuEvolutionCommitLaunch(void);
+int menuEvolutionLaunchTrampoline(void);
+int menuEvolutionLaunchNative(void);
+void menuEvolutionCancelPreparedLaunch(void);
+void menuEvolutionContext(void);
+void menuEvolutionSecondary(void);
+void menuEvolutionRefresh(void);
+int menuEvolutionSelectCategory(int apps);
+int menuEvolutionEnsureCategory(int apps);
+#endif
 
 // Sets the selected item if it is found in the menu list
 void menuSetSelectedItem(menu_item_t *item);

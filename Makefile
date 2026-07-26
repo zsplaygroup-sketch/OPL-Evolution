@@ -42,6 +42,10 @@ DTL_T10000 ?= 0
 #Nor stripping neither compressing binary ELF after compiling.
 NOT_PACKED ?= 0
 
+#Build the opt-in OPL Evolution milestone interface and artifact.
+OPL_EVO ?= 0
+OPL_EVO_STANDALONE ?= 0
+
 # ======== END OF CONFIGURABLE SECTION. DO NOT MODIFY VARIABLES AFTER THIS POINT!! ========
 DEBUG ?= 0
 EESIO_DEBUG ?= 0
@@ -75,6 +79,17 @@ FRONTEND_OBJS = pad.o xparam.o fntsys.o renderman.o menusys.o OSDHistory.o syste
 		dia.o ioman.o texcache.o themes.o supportbase.o bdmsupport.o ethsupport.o hddsupport.o zso.o lz4.o \
 		appsupport.o gui.o guigame.o vmc_groups.o textures.o opl.o atlas.o nbns.o httpclient.o gsm.o cheatman.o sound.o ps2cnf.o
 
+ifeq ($(OPL_EVO),1)
+  FRONTEND_OBJS += evo_boot.o evo_engine.o evo_ps1_art.o evo_settings.o evo_startup.o evo_ui.o
+  EE_CFLAGS += -DOPL_EVO
+endif
+
+ifeq ($(OPL_EVO_STANDALONE),1)
+  FRONTEND_OBJS := $(filter-out menusys.o,$(FRONTEND_OBJS))
+  FRONTEND_OBJS += evo_main.o
+  EE_CFLAGS += -DOPL_EVO_STANDALONE
+endif
+
 IOP_OBJS =	iomanx.o filexio.o ps2fs.o usbd.o bdmevent.o \
 		bdm.o bdmfs_fatfs.o usbmass_bd.o iLinkman.o IEEE1394_bd.o mx4sio_bd.o \
 		ps2atad.o hdpro_atad.o poweroff.o ps2hdd.o xhdd.o genvmc.o lwnbdsvr.o \
@@ -98,7 +113,7 @@ PNG_ASSETS = load0 load1 load2 load3 load4 load5 load6 load7 usb usb_bd ilk_bd \
 	Rating_1 Rating_2 Rating_3 Rating_4 Rating_5 Scan_240p Scan_240p1 Scan_480i Scan_480p \
 	Scan_480p1 Scan_480p2 Scan_480p3 Scan_480p4 Scan_480p5 Scan_576i Scan_576p Scan_720p \
 	Scan_1080i Scan_1080i2 Scan_1080p Vmode_multi Vmode_ntsc Vmode_pal logo case apps_case\
-	Index_0 Index_1 Index_2 Index_3 Index_4
+	Index_0 Index_1 Index_2 Index_3 Index_4 evo_dashboard evo_boot
 	# unused icons - up down l1 l2 l3 r1 r2 r3
 
 GFX_OBJS = $(PNG_ASSETS:%=%_png.o) poeveticanew.o icon_sys.o icon_icn.o
@@ -114,6 +129,7 @@ TRANSLATIONS = Albanian Arabic Bulgarian Cebuano Croatian Czech Danish Dutch Fil
 EE_BIN = opl.elf
 EE_BIN_STRIPPED = opl_stripped.elf
 EE_BIN_PACKED = OPNPS2LD.ELF
+EVO_BIN_PACKED = OPL-EVOLUTION.ELF
 EE_VPKD = OPNPS2LD-$(OPL_VERSION)
 EE_SRC_DIR = src/
 EE_OBJS_DIR = obj/
@@ -227,7 +243,7 @@ EE_LDFLAGS += -fdata-sections -ffunction-sections -Wl,--gc-sections
 
 .SILENT:
 
-.PHONY: all release debug iopcore_debug eesio_debug ingame_debug deci2_debug debug_ppctty iopcore_ppctty_debug ingame_ppctty_debug clean rebuild pc_tools pc_tools_win32 oplversion format format-check ps2sdk-not-setup download_lng download_lwNBD languages
+.PHONY: all evolution release debug iopcore_debug eesio_debug ingame_debug deci2_debug debug_ppctty iopcore_ppctty_debug ingame_ppctty_debug clean rebuild pc_tools pc_tools_win32 oplversion format format-check ps2sdk-not-setup download_lng download_lwNBD languages
 
 ifdef PS2SDK
 
@@ -239,6 +255,9 @@ ifneq ($(NOT_PACKED),1)
 else
 	$(MAKE) $(EE_BIN)
 endif
+
+evolution:
+	$(MAKE) OPL_EVO=1 OPL_EVO_STANDALONE=1 EE_BIN_PACKED=$(EVO_BIN_PACKED) LOCALVERSION=evolution all
 
 release: download_lng download_lwNBD languages $(EE_VPKD).ZIP
 
@@ -269,7 +288,7 @@ ingame_ppctty_debug:
 clean:	download_lwNBD
 	echo "Cleaning..."
 	echo "-Interface"
-	rm -fr $(MAPFILE) $(EE_BIN) $(EE_BIN_PACKED) $(EE_BIN_STRIPPED) $(EE_VPKD).* $(EE_OBJS_DIR) $(EE_ASM_DIR)
+	rm -fr $(MAPFILE) $(EE_BIN) $(EE_BIN_PACKED) $(EVO_BIN_PACKED) $(EE_BIN_STRIPPED) $(EE_VPKD).* $(EE_OBJS_DIR) $(EE_ASM_DIR)
 	echo "-EE core"
 	$(MAKE) -C ee_core clean
 	echo "-IOP core"

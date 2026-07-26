@@ -63,6 +63,11 @@
 #define OPL_VMODE_CHANGE_CONFIRMATION_TIMEOUT_MS 10000
 
 int oplPath2Mode(const char *path);
+void oplRuntimeInitialize(int argc, char *argv[], int allowAutoLaunch);
+#ifdef OPL_EVO
+struct _item_list_t;
+struct _item_list_t *oplGetSupport(int mode);
+#endif
 int oplGetAppImage(const char *device, char *folder, int isRelative, char *value, char *suffix, GSTEXTURE *resultTex, short psm);
 int oplScanApps(int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg);
 int oplShouldAppsUpdate(void);
@@ -181,6 +186,9 @@ extern int gPadMacroSettings;
 extern int gScrollSpeed;
 // Exit path
 extern char gExitPath[256];
+#ifdef OPL_EVO
+extern char gEvolutionBootPath[256];
+#endif
 // Enable Debug Colors
 extern int gEnableDebug;
 

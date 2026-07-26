@@ -24,6 +24,12 @@ int startPads();
 int readPads();
 void unloadPads();
 
+/**
+ * Returns the last observed state for an initialized native pad.
+ * 1 means connected, 0 means disconnected, and -1 means the index is absent.
+ */
+int padGetConnectionStatus(int index, int *port, int *slot);
+
 int getKey(int num);
 
 int getKeyOn(int num);

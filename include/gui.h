@@ -58,6 +58,10 @@ extern int guiFrameId;
 #define GUI_SCREEN_INFO      2
 #define GUI_SCREEN_GAME_MENU 3
 #define GUI_SCREEN_APP_MENU  4
+#ifdef OPL_EVO
+#define GUI_SCREEN_EVO_CONTROLLERS 5
+#define GUI_SCREEN_EVO_DIAGNOSTICS 6
+#endif
 
 void guiSwitchScreen(int target);
 
@@ -74,6 +78,10 @@ void guiLock();
 
 /** Unlocks gui after direct gui data updates */
 void guiUnlock();
+
+/** Begins and submits a directly-rendered frame. */
+void guiStartFrame(void);
+void guiEndFrame(void);
 
 /** invokes the intro loop */
 void guiIntroLoop();
@@ -103,6 +111,7 @@ int guiGetOpCompleted(int opid);
 int guiDeferUpdate(struct gui_update_t *op);
 
 void guiExecDeferredOps(void);
+int guiIsInitComplete(void);
 
 /** Allocates a new deffered operation */
 struct gui_update_t *guiOpCreate(gui_op_type_t type);

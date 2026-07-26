@@ -10,6 +10,26 @@
 #include "include/pad.h"
 #include "include/sound.h"
 
+#ifdef OPL_EVO_STANDALONE
+/*
+ * Existing theme files can still contain upstream menu element definitions,
+ * but a standalone Evolution executable must not resolve their labels through
+ * menusys.o.
+ */
+static char *evoThemeMenuItemText(menu_item_t *item)
+{
+    return item->text_id >= 0 ? _l(item->text_id) : item->text;
+}
+
+static char *evoThemeSubmenuItemText(submenu_item_t *item)
+{
+    return item->text_id >= 0 ? _l(item->text_id) : item->text;
+}
+
+#define menuItemGetText    evoThemeMenuItemText
+#define submenuItemGetText evoThemeSubmenuItemText
+#endif
+
 #define MENU_POS_V     50
 #define HINT_HEIGHT    32
 #define DECORATOR_SIZE 20
@@ -581,6 +601,135 @@ static void drawGameImage(struct menu_list *menu, struct submenu_list *item, con
             guiDrawBGPlasma();
     }
 }
+
+#ifdef OPL_EVO
+int thmDrawEvolutionCover(struct menu_list *menu, struct submenu_list *item, int x, int y, int width, int height)
+{
+    item_list_t *list;
+    theme_element_t *elem;
+
+    if (!menu || !menu->item || !item)
+        return 0;
+
+    list = (item_list_t *)menu->item->userdata;
+    elem = list && list->mode == APP_MODE ? gTheme->appsMainElems.first : gTheme->mainElems.first;
+
+    while (elem) {
+        if (elem->type == ELEM_TYPE_GAME_IMAGE && elem->extended && elem->drawElem == &drawGameImage) {
+            mutable_image_t *image = (mutable_image_t *)elem->extended;
+
+            if (image->cache && image->cache->suffix && strcmp(image->cache->suffix, "COV") == 0) {
+                GSTEXTURE *texture = getGameImageTexture(image->cache, menu->item->userdata, &item->item);
+
+                // Evolution owns its flat artwork frame. Draw only the raw
+                // cached cover, never the active theme's legacy case overlay
+                // or default cover graphic.
+                if (texture && texture->Mem) {
+                    rmDrawPixmap(texture, x, y, ALIGN_NONE, width, height, SCALING_RATIO, gDefaultCol);
+                    return 1;
+                }
+                return 0;
+            }
+        }
+        elem = elem->next;
+    }
+    return 0;
+}
+
+int thmDrawEvolutionItemCover(item_list_t *list, int id, int *cacheId,
+                              int *cacheUid, int x, int y, int width,
+                              int height)
+{
+    theme_element_t *elem;
+
+    if (!list || !cacheId || !cacheUid || !gTheme)
+        return 0;
+
+    elem = list->mode == APP_MODE ?
+               gTheme->appsMainElems.first :
+               gTheme->mainElems.first;
+
+    while (elem) {
+        if (elem->type == ELEM_TYPE_GAME_IMAGE && elem->extended &&
+            elem->drawElem == &drawGameImage) {
+            mutable_image_t *image = (mutable_image_t *)elem->extended;
+
+            if (image->cache && image->cache->suffix &&
+                strcmp(image->cache->suffix, "COV") == 0) {
+                char *startup;
+                GSTEXTURE *texture;
+                int userId = image->cache->userId;
+
+                if (!gEnableArt || !list->itemGetStartup ||
+                    userId < 0 || userId >= gTheme->gameCacheCount)
+                    return 0;
+
+                startup = list->itemGetStartup(list, id);
+                texture = cacheGetTexture(image->cache, list,
+                                          &cacheId[userId],
+                                          &cacheUid[userId],
+                                          startup);
+                if (texture && texture->Mem) {
+                    rmDrawPixmap(texture, x, y, ALIGN_NONE, width, height,
+                                 SCALING_RATIO, gDefaultCol);
+                    return 1;
+                }
+                return 0;
+            }
+        }
+        elem = elem->next;
+    }
+
+    return 0;
+}
+
+int thmLoadEvolutionDashboard(void)
+{
+    GSTEXTURE *texture;
+    int result;
+
+    if (gTheme == NULL)
+        return -1;
+
+    texture = &gTheme->textures[EVO_DASHBOARD_BG];
+    if (texture->Mem != NULL) {
+        texture->Filter = GS_FILTER_NEAREST;
+        return 0;
+    }
+
+    result = texLoadInternal(texture, EVO_DASHBOARD_BG);
+    if (result == 0)
+        texture->Filter = GS_FILTER_NEAREST;
+
+    return result;
+}
+
+void thmUnloadEvolutionDashboard(void)
+{
+    GSTEXTURE *texture;
+
+    if (gTheme == NULL)
+        return;
+
+    texture = &gTheme->textures[EVO_DASHBOARD_BG];
+    if (texture->Mem != NULL || texture->Clut != NULL) {
+        rmUnloadTexture(texture);
+        texFree(texture);
+    }
+}
+
+void thmSuspendEvolutionDashboard(void)
+{
+    GSTEXTURE *texture;
+
+    if (gTheme == NULL)
+        return;
+
+    texture = &gTheme->textures[EVO_DASHBOARD_BG];
+    if (texture->Mem != NULL)
+        rmInvalidateTexture(texture);
+}
+#endif
 
 static void initGameImage(const char *themePath, config_set_t *themeConfig, theme_t *theme, theme_element_t *elem, const char *name, const char *pattern, int count, const char *texture, const char *overlay)
 {

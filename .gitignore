@@ -54,3 +54,13 @@ lng/lang_*.lng
 src/lang_internal.c
 include/lang_autogen.h
 tmp/
+
+# OPL Evolution local build and design-verification artifacts
+build-logs/
+baseline-artifacts/
+design/boot-qa/
+design-qa.md
+docs/BASELINE_SOURCE.md
+docs/ENVIRONMENT_REPORT.md
+docs/MILESTONE_*.md
+docs/TOOLCHAIN_SETUP.md

@@ -17,7 +17,13 @@
 #include "include/system.h"
 #include "include/ioman.h"
 #include "include/sound.h"
+#include <elf-loader.h>
+#ifdef OPL_EVO
+#include "include/evo_ui.h"
+#endif
 #include <assert.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 enum MENU_IDs {
     MENU_SETTINGS = 0,
@@ -29,6 +35,12 @@ enum MENU_IDs {
     MENU_NET_CONFIG,
     MENU_NET_UPDATE,
     MENU_START_NBD,
+#ifdef OPL_EVO
+    MENU_EVO_LIBRARY,
+    MENU_EVO_ORIGINAL,
+    MENU_EVO_CONTROLLERS,
+    MENU_EVO_DIAGNOSTICS,
+#endif
     MENU_ABOUT,
     MENU_SAVE_CHANGES,
     MENU_EXIT,
@@ -59,6 +71,10 @@ static menu_list_t *selected_item;
 static int actionStatus;
 static int itemConfigId;
 static config_set_t *itemConfig;
+static item_list_t *evolutionLaunchSupport;
+static config_set_t *evolutionLaunchConfig;
+static int evolutionLaunchId = -1;
+static int evolutionLaunchOwnsConfig;
 
 static u8 parentalLockCheckEnabled = 1;
 
@@ -221,6 +237,16 @@ static void menuInitMainMenu(void)
     submenuAppendItem(&mainMenu, -1, NULL, MENU_NET_CONFIG, _STR_NETCONFIG);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_NET_UPDATE, _STR_NET_UPDATE);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_START_NBD, _STR_STARTNBD);
+#ifdef OPL_EVO
+    static char evolutionLabel[] = "Enter OPL Evolution";
+    static char originalLabel[] = "Original OPL Interface";
+    static char controllersLabel[] = "Controllers - Evolution";
+    static char diagnosticsLabel[] = "Diagnostics - Evolution";
+    submenuAppendItem(&mainMenu, -1, evoUiIsEnabled() ? originalLabel : evolutionLabel,
+                      evoUiIsEnabled() ? MENU_EVO_ORIGINAL : MENU_EVO_LIBRARY, -1);
+    submenuAppendItem(&mainMenu, -1, controllersLabel, MENU_EVO_CONTROLLERS, -1);
+    submenuAppendItem(&mainMenu, -1, diagnosticsLabel, MENU_EVO_DIAGNOSTICS, -1);
+#endif
     submenuAppendItem(&mainMenu, -1, NULL, MENU_ABOUT, _STR_ABOUT);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_SAVE_CHANGES, _STR_SAVE_CHANGES);
     submenuAppendItem(&mainMenu, -1, NULL, MENU_EXIT, _STR_EXIT);
@@ -779,7 +805,7 @@ void menuRenderMenu()
         // render, advance
         fntRenderString(gTheme->fonts[0], 320, y, ALIGN_CENTER, 0, 0, submenuItemGetText(&it->item), (cp == sitem) ? gTheme->selTextColor : gTheme->textColor);
         y += spacing;
-        if (cp == (MENU_ABOUT - 1))
+        if (it->next && it->next->item.id == MENU_ABOUT)
             y += spacing / 2;
     }
 
@@ -892,6 +918,20 @@ void menuHandleInputMenu()
         } else if (id == MENU_START_NBD) {
             if (menuCheckParentalLock() == 0)
                 handleLwnbdSrv();
+#ifdef OPL_EVO
+        } else if (id == MENU_EVO_LIBRARY) {
+            evoUiSetEnabled(1);
+            guiSwitchScreen(GUI_SCREEN_MAIN);
+            refreshMenuPosition();
+        } else if (id == MENU_EVO_ORIGINAL) {
+            evoUiSetEnabled(0);
+            guiSwitchScreen(GUI_SCREEN_MAIN);
+            refreshMenuPosition();
+        } else if (id == MENU_EVO_CONTROLLERS) {
+            guiSwitchScreen(GUI_SCREEN_EVO_CONTROLLERS);
+        } else if (id == MENU_EVO_DIAGNOSTICS) {
+            guiSwitchScreen(GUI_SCREEN_EVO_DIAGNOSTICS);
+#endif
         } else if (id == MENU_ABOUT) {
             guiShowAbout();
         } else if (id == MENU_SAVE_CHANGES) {
@@ -997,6 +1037,514 @@ void menuHandleInputMain()
             selected_item->item->execCross(selected_item->item);
     }
 }
+
+void menuGetSelectionSummary(char *source, size_t sourceSize, char *title, size_t titleSize)
+{
+    const char *sourceText = "No active source";
+    const char *titleText = "No item selected";
+
+    if (selected_item && selected_item->item) {
+        sourceText = menuItemGetText(selected_item->item);
+        if (selected_item->item->current)
+            titleText = submenuItemGetText(&selected_item->item->current->item);
+    }
+
+    if (source && sourceSize > 0)
+        snprintf(source, sourceSize, "%s", sourceText);
+    if (title && titleSize > 0)
+        snprintf(title, titleSize, "%s", titleText);
+}
+
+#ifdef OPL_EVO
+void menuEvolutionRenderList(int x, int y, int width, int rowHeight, int rows)
+{
+    submenu_list_t *it;
+    int before;
+    int row;
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current) {
+        fntRenderString(FNT_DEFAULT, x, y, ALIGN_NONE, width, rowHeight,
+                        "No items available", gTheme->textColor);
+        return;
+    }
+
+    WaitSema(menuSemaId);
+    it = selected_item->item->current;
+    before = rows / 2;
+    while (before-- > 0 && it->prev)
+        it = it->prev;
+
+    for (row = 0; row < rows && it; row++, it = it->next) {
+        const int rowY = y + row * rowHeight;
+        const int selected = it == selected_item->item->current;
+        const int hasThumbnail = rowHeight >= 38;
+        const int thumbnailWidth = rowHeight >= 41 ? 45 : 39;
+        const int textX = hasThumbnail ? x + thumbnailWidth + 7 : x;
+        const int textWidth = hasThumbnail ? width - thumbnailWidth - 7 : width;
+
+        if (selected) {
+            rmDrawRect(x - 6, rowY - 3, width + 12, rowHeight, GS_SETREG_RGBA(0x02, 0x0C, 0x1C, 0x80));
+            rmDrawLine(x - 6, rowY - 3, x + width + 6, rowY - 3, GS_SETREG_RGBA(0x00, 0x94, 0xFF, 0x80));
+            rmDrawLine(x - 6, rowY + rowHeight - 3, x + width + 6, rowY + rowHeight - 3, GS_SETREG_RGBA(0x00, 0x94, 0xFF, 0x80));
+            rmDrawLine(x - 6, rowY - 3, x - 6, rowY + rowHeight - 3, GS_SETREG_RGBA(0x00, 0x94, 0xFF, 0x80));
+            rmDrawLine(x + width + 6, rowY - 3, x + width + 6, rowY + rowHeight - 3, GS_SETREG_RGBA(0x00, 0x94, 0xFF, 0x80));
+        }
+
+        if (hasThumbnail) {
+            rmDrawRect(x, rowY, thumbnailWidth, rowHeight - 6, GS_SETREG_RGBA(0x02, 0x0C, 0x1C, 0x80));
+            thmDrawEvolutionCover(selected_item, it, x, rowY, thumbnailWidth, rowHeight - 6);
+        }
+
+        fntRenderString(FNT_DEFAULT, textX, rowY + (hasThumbnail ? 7 : 0), ALIGN_NONE, textWidth, rowHeight,
+                        submenuItemGetText(&it->item),
+                        selected ? GS_SETREG_RGBA(0xD6, 0xE0, 0xEF, 0x80) : GS_SETREG_RGBA(0x67, 0x7A, 0x98, 0x80));
+    }
+    SignalSema(menuSemaId);
+}
+
+int menuEvolutionRenderCover(int x, int y, int width, int height)
+{
+    int result = 0;
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return 0;
+
+    WaitSema(menuSemaId);
+    result = thmDrawEvolutionCover(selected_item, selected_item->item->current, x, y, width, height);
+    SignalSema(menuSemaId);
+    return result;
+}
+
+int menuEvolutionGetDetails(char *startup, size_t startupSize, int *position, int *total)
+{
+    submenu_list_t *it;
+    item_list_t *list;
+    int index = 0;
+    int count = 0;
+
+    if (startup && startupSize > 0)
+        startup[0] = '\0';
+    if (position)
+        *position = 0;
+    if (total)
+        *total = 0;
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return 0;
+
+    list = (item_list_t *)selected_item->item->userdata;
+    if (startup && startupSize > 0 && list && list->itemGetStartup) {
+        const char *value = list->itemGetStartup(list, selected_item->item->current->item.id);
+        if (value)
+            snprintf(startup, startupSize, "%s", value);
+    }
+
+    it = selected_item->item->submenu;
+    while (it) {
+        count++;
+        if (it == selected_item->item->current)
+            index = count;
+        it = it->next;
+    }
+
+    if (position)
+        *position = index;
+    if (total)
+        *total = count;
+    return 1;
+}
+
+void menuEvolutionMoveItem(int direction)
+{
+    submenu_list_t *cur;
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return;
+
+    cur = selected_item->item->current;
+    if (direction < 0) {
+        if (cur->prev) {
+            selected_item->item->current = cur->prev;
+        } else {
+            while (cur->next)
+                cur = cur->next;
+            selected_item->item->current = cur;
+        }
+    } else {
+        selected_item->item->current = cur->next ? cur->next : selected_item->item->submenu;
+    }
+    selected_item->item->pagestart = selected_item->item->current;
+    itemConfigId = -1;
+    sfxPlay(SFX_CURSOR);
+}
+
+void menuEvolutionMoveSource(int direction)
+{
+    menu_list_t *it;
+    item_list_t *currentList;
+    int wantApps;
+
+    if (!selected_item || !selected_item->item)
+        return;
+
+    currentList = (item_list_t *)selected_item->item->userdata;
+    wantApps = currentList && currentList->mode == APP_MODE;
+    it = direction < 0 ? selected_item->prev : selected_item->next;
+
+    while (it) {
+        item_list_t *list = (item_list_t *)it->item->userdata;
+        const int isApps = list && list->mode == APP_MODE;
+
+        if (it->item->visible && isApps == wantApps) {
+            selected_item = it;
+            itemConfigId = -1;
+            sfxPlay(SFX_CURSOR);
+            return;
+        }
+        it = direction < 0 ? it->prev : it->next;
+    }
+}
+
+void menuEvolutionMovePage(int direction)
+{
+    int count = 6;
+
+    while (count-- > 0)
+        menuEvolutionMoveItem(direction);
+}
+
+void menuEvolutionActivate(void)
+{
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return;
+
+    if (gSelectButton == KEY_CIRCLE)
+        selected_item->item->execCircle(selected_item->item);
+    else
+        selected_item->item->execCross(selected_item->item);
+}
+
+void menuEvolutionPrimeConfig(void)
+{
+    if (selected_item && selected_item->item && selected_item->item->current)
+        _menuRequestConfig();
+}
+
+int menuEvolutionLaunchDirect(void)
+{
+    item_list_t *support;
+    config_set_t *configSet;
+    int id;
+    int ownsConfig = 0;
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return -1;
+
+    support = (item_list_t *)selected_item->item->userdata;
+    if (!support || !support->enabled || !support->itemGetConfig || !support->itemLaunch)
+        return -2;
+
+    id = selected_item->item->current->item.id;
+    configSet = NULL;
+
+    /*
+     * Match original OPL's normal path: use the configuration that its menu
+     * preload routine populated while the title was selected.  Only fall back
+     * to a direct read if Confirm arrives before that preload completes.
+     */
+    WaitSema(menuSemaId);
+    if (itemConfigId == id && itemConfig != NULL)
+        configSet = itemConfig;
+    SignalSema(menuSemaId);
+
+    if (!configSet) {
+        configSet = support->itemGetConfig(support, id);
+        ownsConfig = 1;
+    }
+    if (!configSet)
+        return -3;
+
+    support->itemLaunch(support, id, configSet);
+
+    /* Successful PS2 launches do not return. */
+    if (ownsConfig)
+        configFree(configSet);
+    return -4;
+}
+
+void menuEvolutionCancelPreparedLaunch(void)
+{
+    if (evolutionLaunchOwnsConfig && evolutionLaunchConfig)
+        configFree(evolutionLaunchConfig);
+
+    evolutionLaunchSupport = NULL;
+    evolutionLaunchConfig = NULL;
+    evolutionLaunchId = -1;
+    evolutionLaunchOwnsConfig = 0;
+}
+
+int menuEvolutionPrepareLaunch(void)
+{
+    item_list_t *support;
+    config_set_t *configSet = NULL;
+    int id;
+    int ownsConfig = 0;
+
+    menuEvolutionCancelPreparedLaunch();
+
+    if (!selected_item || !selected_item->item || !selected_item->item->current)
+        return -1;
+
+    support = (item_list_t *)selected_item->item->userdata;
+    if (!support || !support->enabled || !support->itemGetConfig || !support->itemLaunch)
+        return -2;
+
+    id = selected_item->item->current->item.id;
+    WaitSema(menuSemaId);
+    if (itemConfigId == id && itemConfig != NULL)
+        configSet = itemConfig;
+    SignalSema(menuSemaId);
+
+    if (!configSet) {
+        configSet = support->itemGetConfig(support, id);
+        ownsConfig = 1;
+    }
+    if (!configSet)
+        return -3;
+
+    evolutionLaunchSupport = support;
+    evolutionLaunchConfig = configSet;
+    evolutionLaunchId = id;
+    evolutionLaunchOwnsConfig = ownsConfig;
+    return 0;
+}
+
+int menuEvolutionCommitLaunch(void)
+{
+    if (!evolutionLaunchSupport || !evolutionLaunchConfig || evolutionLaunchId < 0)
+        return -1;
+
+    evolutionLaunchSupport->itemLaunch(evolutionLaunchSupport,
+                                       evolutionLaunchId,
+                                       evolutionLaunchConfig);
+
+    /* Successful PS2 launches do not return. */
+    menuEvolutionCancelPreparedLaunch();
+    return -2;
+}
+
+static int evolutionTryBootPath(char *resolved, size_t resolvedSize,
+                                const char *candidate)
+{
+    int fd;
+
+    fd = open(candidate, O_RDONLY);
+    if (fd < 0)
+        return 0;
+
+    close(fd);
+    snprintf(resolved, resolvedSize, "%s", candidate);
+    return 1;
+}
+
+static int evolutionResolveBootPath(char *resolved, size_t resolvedSize)
+{
+    char candidate[256];
+    const char *path;
+    const char *suffix;
+    const char *baseName;
+    int unit;
+
+    if (!resolved || resolvedSize == 0 || gEvolutionBootPath[0] == '\0')
+        return 0;
+
+    path = gEvolutionBootPath;
+
+    /*
+     * wLaunchELF and OPL may report the first USB device as mass:/ or mass?:/.
+     * Resolve that alias while the BDM modules are still mounted.  The ELF
+     * loader is then given the concrete unit that was proven readable.
+     */
+    if (strncmp(path, "mass:", 5) == 0 ||
+        strncmp(path, "mass?:", 6) == 0) {
+        suffix = strchr(path, ':');
+        if (suffix) {
+            suffix++;
+            for (unit = 0; unit <= 4; unit++) {
+                snprintf(candidate, sizeof(candidate), "mass%d:%s",
+                         unit, suffix);
+                if (evolutionTryBootPath(resolved, resolvedSize, candidate))
+                    return 1;
+            }
+        }
+    } else if (evolutionTryBootPath(resolved, resolvedSize, path)) {
+        return 1;
+    }
+
+    /*
+     * Some ELF launchers pass only a filename.  The test build is deployed in
+     * the USB root, so search each mounted mass unit for that basename.
+     */
+    baseName = strrchr(path, '/');
+    baseName = baseName ? baseName + 1 : path;
+    if (baseName[0] != '\0') {
+        for (unit = 0; unit <= 4; unit++) {
+            snprintf(candidate, sizeof(candidate), "mass%d:/%s",
+                     unit, baseName);
+            if (evolutionTryBootPath(resolved, resolvedSize, candidate))
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+int menuEvolutionLaunchTrampoline(void)
+{
+    char bootPath[256];
+    char gameName[192];
+    char startup[32];
+    char media[16];
+    char format[16];
+    char partition[2] = "";
+    char *argv[4];
+    int mode;
+
+    if (!evolutionLaunchSupport || !evolutionLaunchConfig || evolutionLaunchId < 0)
+        return -1;
+    if (evolutionLaunchSupport->mode < BDM_MODE ||
+        evolutionLaunchSupport->mode > BDM_MODE4)
+        return -2;
+    if (!evolutionResolveBootPath(bootPath, sizeof(bootPath)))
+        return -3;
+
+    if (!configGetStrCopy(evolutionLaunchConfig, CONFIG_ITEM_NAME,
+                          gameName, sizeof(gameName)) ||
+        !configGetStrCopy(evolutionLaunchConfig, CONFIG_ITEM_STARTUP,
+                          startup, sizeof(startup)) ||
+        !configGetStrCopy(evolutionLaunchConfig, CONFIG_ITEM_MEDIA,
+                          media, sizeof(media)) ||
+        !configGetStrCopy(evolutionLaunchConfig, CONFIG_ITEM_FORMAT,
+                          format, sizeof(format)))
+        return -4;
+
+    if (strcasecmp(format, "ISO") == 0)
+        strncat(gameName, ".iso", sizeof(gameName) - strlen(gameName) - 1);
+    else if (strcasecmp(format, "ZSO") == 0)
+        strncat(gameName, ".zso", sizeof(gameName) - strlen(gameName) - 1);
+    else
+        return -5; /* OPL's clean BDM auto-launch does not support UL games. */
+
+    mode = oplPath2Mode(bootPath);
+    if (mode < BDM_MODE || mode > BDM_MODE4)
+        mode = evolutionLaunchSupport->mode;
+    argv[0] = gameName;
+    argv[1] = startup;
+    argv[2] = media;
+    argv[3] = "bdm";
+
+    /*
+     * Load the same Evolution ELF again from its original device.  Its
+     * built-in "bdm" argv path performs miniInit and launches the selected
+     * game without constructing the GUI, so dashboard resources and menu
+     * state cannot contaminate the loader.
+     */
+    deinit(UNMOUNT_EXCEPTION, mode);
+    LoadELFFromFileWithPartition(bootPath, partition, 4, argv);
+    return -6;
+}
+
+int menuEvolutionLaunchNative(void)
+{
+    if (!selected_item || !selected_item->item ||
+        !selected_item->item->current)
+        return -1;
+
+    /*
+     * Discard only Evolution's retained launch reference.  The normal OPL
+     * selection callback then owns configuration loading and calls the live
+     * BDM support object's itemLaunch routine exactly as original OPL does.
+     */
+    menuEvolutionCancelPreparedLaunch();
+
+    if (gSelectButton == KEY_CIRCLE)
+        selected_item->item->execCircle(selected_item->item);
+    else
+        selected_item->item->execCross(selected_item->item);
+
+    /* A successful OPL launch transfers control and never returns. */
+    return -6;
+}
+
+void menuEvolutionContext(void)
+{
+    if (selected_item && selected_item->item && selected_item->item->current)
+        selected_item->item->execTriangle(selected_item->item);
+}
+
+void menuEvolutionSecondary(void)
+{
+    if (selected_item && selected_item->item && selected_item->item->current)
+        selected_item->item->execSquare(selected_item->item);
+}
+
+void menuEvolutionRefresh(void)
+{
+    if (selected_item && selected_item->item && selected_item->item->refresh)
+        selected_item->item->refresh(selected_item->item);
+}
+
+int menuEvolutionSelectCategory(int apps)
+{
+    menu_list_t *it = menu;
+    menu_list_t *fallback = NULL;
+
+    while (it) {
+        item_list_t *list = (item_list_t *)it->item->userdata;
+        const int isApps = list && list->mode == APP_MODE;
+
+        if (it->item->visible && isApps == (apps ? 1 : 0)) {
+            if (!fallback)
+                fallback = it;
+
+            /*
+             * BDM devices initialize asynchronously.  Prefer a source whose
+             * game submenu is already populated instead of permanently
+             * attaching Evolution to the first visible but empty source.
+             */
+            if (it->item->current || it->item->submenu) {
+                selected_item = it;
+                itemConfigId = -1;
+                return 1;
+            }
+        }
+        it = it->next;
+    }
+
+    if (fallback) {
+        selected_item = fallback;
+        itemConfigId = -1;
+        return 1;
+    }
+
+    return 0;
+}
+
+int menuEvolutionEnsureCategory(int apps)
+{
+    item_list_t *list;
+    const int wantApps = apps ? 1 : 0;
+
+    if (selected_item && selected_item->item) {
+        list = (item_list_t *)selected_item->item->userdata;
+        if (list && ((list->mode == APP_MODE) == wantApps) &&
+            (selected_item->item->current || selected_item->item->submenu))
+            return 1;
+    }
+
+    return menuEvolutionSelectCategory(apps);
+}
+#endif
 
 void menuRenderInfo(void)
 {

@@ -351,6 +351,22 @@ int readPads()
     return rslt;
 }
 
+int padGetConnectionStatus(int index, int *port, int *slot)
+{
+    const struct pad_data_t *pad;
+
+    if (index < 0 || index >= pad_count)
+        return -1;
+
+    pad = &pad_data[index];
+    if (port != NULL)
+        *port = pad->port;
+    if (slot != NULL)
+        *slot = pad->slot;
+
+    return pad->state == PAD_STATE_STABLE || pad->state == PAD_STATE_FINDCTP1;
+}
+
 /** Key getter with key repeats.
  * @param id The button ID
  * @return nonzero if button is being pressed just now

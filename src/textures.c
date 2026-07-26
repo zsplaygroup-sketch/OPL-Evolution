@@ -97,6 +97,8 @@ extern void *Vmode_pal_png;
 extern void *logo_png;
 extern void *case_png;
 extern void *apps_case_png;
+extern void *evo_dashboard_png;
+extern void *evo_boot_png;
 
 // Not related to screen size, just to limit at some point
 static int maxSize = 720 * 512 * 4;
@@ -216,6 +218,8 @@ static texture_t internalDefault[TEXTURES_COUNT] = {
     {LOGO_PICTURE, "logo", &logo_png},
     {CASE_OVERLAY, "case", &case_png},
     {APPS_CASE_OVERLAY, "apps_case", &apps_case_png},
+    {EVO_DASHBOARD_BG, "evo_dashboard", &evo_dashboard_png},
+    {EVO_BOOT_BG, "evo_boot", &evo_boot_png},
 };
 
 int texLookupInternalTexId(const char *name)

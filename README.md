@@ -1,4 +1,70 @@
-# Open PS2 Loader
+# OPL Evolution
+
+![OPL Evolution dashboard](gfx/evo_dashboard.png)
+
+OPL Evolution is an **unofficial experimental fork** of Open PS2 Loader
+focused on a unified, modern interface for PS2 games, PS1 games through an
+existing POPStarter installation, homebrew, storage, controllers, settings,
+and virtual memory cards.
+
+The current release is **v0.27.0-alpha**. It has been exercised on real PS2
+hardware, but it is not ready to replace a known-good recovery installation.
+Keep Free McBoot, wLaunchELF, and a working OPL ELF available while testing.
+
+## Evolution alpha features
+
+- Standalone Evolution boot flow and dashboard
+- Native PS2 library scanning and launching through OPL's loader engine
+- PS1 library scanning and launching through an existing POPStarter setup
+- PS2 and PS1 cover artwork
+- Persistent controller, memory-card, storage, and network status widgets
+- Native display and audio settings
+- System menu with save, exit-to-Browser, and power-off actions
+- Per-game physical, generic, and dedicated virtual-memory-card assignments
+- 8, 16, 32, and 64 MB VMC creation with progress reporting
+
+## Build
+
+Use the normal OPL toolchain and run:
+
+```sh
+make evolution
+```
+
+The packed output is `OPL-EVOLUTION.ELF`.
+
+See [deployment and recovery instructions](dist/OPL-EVOLUTION/README-DEPLOYMENT.txt),
+the [test plan](docs/OPL_EVOLUTION_TEST_PLAN.md), and the
+[architecture notes](docs/OPL_EVOLUTION_ARCHITECTURE.md).
+
+## Alpha limitations
+
+- This is not an official Open PS2 Loader release.
+- Hardware coverage is still limited.
+- Network settings are read-only in the Evolution interface.
+- Homebrew-library scanning is not finished.
+- POPStarter and its required files are not distributed with this project.
+- Some displays and adapters do not support 480p; Auto remains the safe mode.
+
+When reporting a problem, include the console model and region, boot method,
+storage device and filesystem, video connection, game serial and format, and
+exact reproduction steps.
+
+## Credits and license
+
+OPL Evolution is derived from
+[Open PS2 Loader](https://github.com/ps2homebrew/Open-PS2-Loader) and retains
+its Academic Free License 3.0 licensing and attribution. The launch transition
+is adapted from
+[Irfanlesnar/PS2-Launcher](https://github.com/Irfanlesnar/PS2-Launcher),
+also under AFL-3.0.
+
+No game images, PlayStation BIOS files, POPStarter binaries, or copyrighted
+support files are included.
+
+---
+
+# Upstream Open PS2 Loader documentation
 
 ![logo](https://github.com/ps2homebrew/Open-PS2-Loader/blob/master/gfx/logo.png)
 

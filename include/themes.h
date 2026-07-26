@@ -4,6 +4,7 @@
 #include "include/textures.h"
 #include "include/texcache.h"
 #include "include/menusys.h"
+#include "include/iosupport.h"
 
 #define THM_MAX_FILES 64
 #define THM_MAX_FONTS 16
@@ -134,6 +135,13 @@ void thmReloadScreenExtents(void);
 int thmAddElements(char *path, const char *separator, int forceRefresh);
 const char *thmGetValue(void);
 GSTEXTURE *thmGetTexture(unsigned int id);
+#ifdef OPL_EVO
+int thmDrawEvolutionCover(struct menu_list *menu, struct submenu_list *item, int x, int y, int width, int height);
+int thmDrawEvolutionItemCover(item_list_t *list, int id, int *cacheId, int *cacheUid, int x, int y, int width, int height);
+int thmLoadEvolutionDashboard(void);
+void thmSuspendEvolutionDashboard(void);
+void thmUnloadEvolutionDashboard(void);
+#endif
 void thmEnd(void);
 
 // Indices are shifted in GUI, as we add the internal default theme at 0

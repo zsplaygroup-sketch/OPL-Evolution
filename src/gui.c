@@ -22,6 +22,9 @@
 #include "include/cheatman.h"
 #include "include/sound.h"
 #include "include/guigame.h"
+#ifdef OPL_EVO
+#include "include/evo_ui.h"
+#endif
 
 #include <limits.h>
 #include <stdlib.h>
@@ -83,14 +86,39 @@ typedef struct
     short inMenu;
 } gui_screen_handler_t;
 
-static gui_screen_handler_t screenHandlers[] = {{&menuHandleInputMain, &menuRenderMain, 0},
-                                                {&menuHandleInputMenu, &menuRenderMenu, 1},
-                                                {&menuHandleInputInfo, &menuRenderInfo, 1},
-                                                {&menuHandleInputGameMenu, &menuRenderGameMenu, 1},
-                                                {&menuHandleInputAppMenu, &menuRenderAppMenu, 1}};
+static gui_screen_handler_t screenHandlers[] = {
+#ifdef OPL_EVO_STANDALONE
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+                                                 {&evoUiHandleInputControllers, &evoUiRenderControllers, 1},
+                                                 {&evoUiHandleInputDiagnostics, &evoUiRenderDiagnostics, 1}
+#elif defined(OPL_EVO)
+                                                 {&evoUiHandleInputMain, &evoUiRenderMain, 0},
+#else
+                                                 {&menuHandleInputMain, &menuRenderMain, 0},
+#endif
+#ifndef OPL_EVO_STANDALONE
+                                                 {&menuHandleInputMenu, &menuRenderMenu, 1},
+                                                 {&menuHandleInputInfo, &menuRenderInfo, 1},
+                                                 {&menuHandleInputGameMenu, &menuRenderGameMenu, 1},
+                                                {&menuHandleInputAppMenu, &menuRenderAppMenu, 1}
+#ifdef OPL_EVO
+                                                ,
+                                                {&evoUiHandleInputControllers, &evoUiRenderControllers, 1},
+                                                 {&evoUiHandleInputDiagnostics, &evoUiRenderDiagnostics, 1}
+#endif
+#endif
+};
 
 // default screen handler (menu screen)
+#ifdef OPL_EVO_STANDALONE
+static gui_screen_handler_t *screenHandler = &screenHandlers[GUI_SCREEN_MAIN];
+#else
 static gui_screen_handler_t *screenHandler = &screenHandlers[GUI_SCREEN_MENU];
+#endif
 
 // screen transition handling
 static gui_screen_handler_t *screenHandlerTarget = NULL;
@@ -200,12 +228,19 @@ void guiEndFrame(void)
 
 void guiShowAbout()
 {
-    char OPLVersion[40];
-    char OPLBuildDetails[40];
+    char OPLVersion[72];
+    char OPLBuildDetails[96];
 
+#ifdef OPL_EVO
+    snprintf(OPLVersion, sizeof(OPLVersion), "%s %s", OPL_EVO_APP_NAME, OPL_EVO_VERSION);
+#else
     snprintf(OPLVersion, sizeof(OPLVersion), "Open PS2 Loader %s", OPL_VERSION);
+#endif
     diaSetLabel(diaAbout, ABOUT_TITLE, OPLVersion);
 
+#ifdef OPL_EVO
+    snprintf(OPLBuildDetails, sizeof(OPLBuildDetails), "Based on Open PS2 Loader %s", OPL_VERSION);
+#else
     snprintf(OPLBuildDetails, sizeof(OPLBuildDetails), "GSM %s"
                                                        " - UDMA+"
 #ifdef __RTL
@@ -225,6 +260,7 @@ void guiShowAbout()
              IGS_VERSION
 #endif
     );
+#endif
     diaSetLabel(diaAbout, ABOUT_BUILD_DETAILS, OPLBuildDetails);
 
     diaExecuteDialog(diaAbout, -1, 1, NULL);
@@ -994,13 +1030,16 @@ int guiDeferUpdate(struct gui_update_t *op)
 
 static void guiHandleOp(struct gui_update_t *item)
 {
+#ifndef OPL_EVO_STANDALONE
     submenu_list_t *result = NULL;
+#endif
 
     switch (item->type) {
         case GUI_INIT_DONE:
             gInitComplete = 1;
             break;
 
+#ifndef OPL_EVO_STANDALONE
         case GUI_OP_ADD_MENU:
             menuAppendItem(item->menu.menu);
             break;
@@ -1052,6 +1091,7 @@ static void guiHandleOp(struct gui_update_t *item)
             // append the hint list in the menu item
             menuAddHint(item->menu.menu, item->hint.text_id, item->hint.icon_id);
             break;
+#endif
 
         default:
             LOG("GUI: ??? (%d)\n", item->type);
@@ -1084,6 +1124,11 @@ void guiExecDeferredOps(void)
     guiHandleDeferredOps();
 }
 
+int guiIsInitComplete(void)
+{
+    return gInitComplete;
+}
+
 static void guiDrawBusy(int alpha)
 {
     if (gTheme->loadingIcon) {
@@ -1105,6 +1150,10 @@ static void guiRenderGreeting(int alpha)
         mycolor = GS_SETREG_RGBA(0x80, 0x80, 0x80, alpha);
         rmDrawPixmap(logo, screenWidth >> 1, gTheme->usedHeight >> 1, ALIGN_CENTER, logo->Width, logo->Height, SCALING_RATIO, mycolor);
     }
+#ifdef OPL_EVO
+    if (evoUiIsEnabled())
+        fntRenderString(gTheme->fonts[0], screenWidth >> 1, (gTheme->usedHeight >> 1) + 78, ALIGN_CENTER, 0, 0, OPL_EVO_APP_NAME " " OPL_EVO_VERSION, mycolor);
+#endif
 }
 
 static float mix(float a, float b, float t)

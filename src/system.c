@@ -266,7 +266,14 @@ void sysReset(int modload_mask)
     sysLoadModuleBuffer(&audsrv_irx, size_audsrv_irx, 0, NULL);
 
 #ifdef PADEMU
-    int ds3pads = 1; // only one pad enabled
+    // The standalone OPL UI historically enables one DS3/DS4 slot. Evolution
+    // exposes the two slots already implemented by the menu-time USB and
+    // Bluetooth modules. The normal upstream-style build remains unchanged.
+#ifdef OPL_EVO
+    int ds3pads = 3;
+#else
+    int ds3pads = 1;
+#endif
 
     ds34usb_deinit();
     ds34bt_deinit();

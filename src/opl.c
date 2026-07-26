@@ -34,6 +34,10 @@
 #include "include/cheatman.h"
 #include "include/sound.h"
 #include "include/xparam.h"
+#ifdef OPL_EVO
+#include "include/evo_engine.h"
+#include "include/evo_ui.h"
+#endif
 
 // FIXME: We should not need this function.
 //        Use newlib's 'stat' to get GMT time.
@@ -112,6 +116,16 @@ static char errorMessage[256];
 
 static opl_io_module_t list_support[MODE_COUNT];
 
+#ifdef OPL_EVO
+item_list_t *oplGetSupport(int mode)
+{
+    if (mode < 0 || mode >= MODE_COUNT)
+        return NULL;
+
+    return list_support[mode].support;
+}
+#endif
+
 // Global data
 char *gBaseMCDir;
 int ps2_ip_use_dhcp;
@@ -171,6 +185,9 @@ int gPadMacroSettings;
 #endif
 int gScrollSpeed;
 char gExitPath[256];
+#ifdef OPL_EVO
+char gEvolutionBootPath[256];
+#endif
 int gEnableDebug;
 int gPS2Logo;
 int gDefaultDevice;
@@ -218,6 +235,14 @@ void moduleUpdateMenuInternal(opl_io_module_t *mod, int themeChanged, int langCh
     if (!mod->support)
         return;
 
+#ifdef OPL_EVO_STANDALONE
+    /*
+     * Evolution reads item_list_t directly.  Device state changes therefore
+     * never create, refresh, or select an original OPL menu object.
+     */
+    (void)themeChanged;
+    (void)langChanged;
+#else
     if (langChanged) {
         guiUpdateScreenScale();
         guiCheckNotifications(0, langChanged);
@@ -247,6 +272,7 @@ void moduleUpdateMenuInternal(opl_io_module_t *mod, int themeChanged, int langCh
             submenuRebuildCache(mod->subMenu);
         guiCheckNotifications(themeChanged, 0);
     }
+#endif
 }
 
 static void itemInitSupport(item_list_t *support)
@@ -340,6 +366,9 @@ static void itemExecTriangle(struct menu_item *curMenu)
 
 static void initMenuForListSupport(opl_io_module_t *mod)
 {
+#ifdef OPL_EVO_STANDALONE
+    mod->subMenu = NULL;
+#else
     mod->menuItem.icon_id = mod->support->itemIconId(mod->support);
     mod->menuItem.text = NULL;
     mod->menuItem.text_id = mod->support->itemTextId(mod->support);
@@ -368,10 +397,14 @@ static void initMenuForListSupport(opl_io_module_t *mod)
     mc->menu.menu = &mod->menuItem;
     mc->menu.subMenu = &mod->subMenu;
     guiDeferUpdate(mc);
+#endif
 }
 
 static void clearMenuGameList(opl_io_module_t *mdl)
 {
+#ifdef OPL_EVO_STANDALONE
+    (void)mdl;
+#else
     if (mdl->subMenu != NULL) {
         // lock - gui has to be unused here
         guiLock();
@@ -385,6 +418,7 @@ static void clearMenuGameList(opl_io_module_t *mdl)
         // unlock
         guiUnlock();
     }
+#endif
 }
 
 void initSupport(item_list_t *itemList, int mode, int force_reinit)
@@ -652,6 +686,13 @@ config_set_t *oplGetLegacyAppsInfo(char *name)
 // ----------------------------------------------------------
 static void updateMenuFromGameList(opl_io_module_t *mdl)
 {
+#ifdef OPL_EVO_STANDALONE
+    /*
+     * The support backend owns its game array.  Evolution consumes that array
+     * directly, so refreshing it must not manufacture legacy submenu nodes.
+     */
+    mdl->support->itemUpdate(mdl->support);
+#else
     guiExecDeferredOps();
     clearMenuGameList(mdl);
 
@@ -696,6 +737,7 @@ static void updateMenuFromGameList(opl_io_module_t *mdl)
         gup->menu.subMenu = &mdl->subMenu;
         guiDeferUpdate(gup);
     }
+#endif
 }
 
 void menuDeferredUpdate(void *data)
@@ -1209,12 +1251,14 @@ void applyConfig(int themeID, int langID, int skipDeviceRefresh)
             moduleUpdateMenuInternal(&list_support[i], changed, langChanged);
         }
     } else {
+#ifndef OPL_EVO_STANDALONE
         if (changed) {
             for (int i = 0; i < MODE_COUNT; i++) {
                 if (list_support[i].support && list_support[i].subMenu)
                     submenuRebuildCache(list_support[i].subMenu);
             }
         }
+#endif
     }
 
     bgmUnMute();
@@ -1661,7 +1705,9 @@ void deinit(int exception, int modeSelected)
     audioEnd();
     ioEnd();
     guiEnd();
+#ifndef OPL_EVO_STANDALONE
     menuEnd();
+#endif
     lngEnd();
     thmEnd();
     rmEnd();
@@ -1799,7 +1845,9 @@ static void init(void)
     thmInit();
     guiInit();
     ioInit();
+#ifndef OPL_EVO_STANDALONE
     menuInit();
+#endif
 
     startPads();
 
@@ -1836,11 +1884,13 @@ static void deferredInit(void)
     struct gui_update_t *id = guiOpCreate(GUI_INIT_DONE);
     guiDeferUpdate(id);
 
+#ifndef OPL_EVO_STANDALONE
     if (list_support[gDefaultDevice].support) {
         id = guiOpCreate(GUI_OP_SELECT_MENU);
         id->menu.menu = &list_support[gDefaultDevice].menuItem;
         guiDeferUpdate(id);
     }
+#endif
 }
 
 static void deferredAudioInit(void)
@@ -2027,8 +2077,8 @@ static void autoLaunchBDMGame(char *argv[])
     bdmLaunchGame(NULL, -1, configSet);
 }
 
-// --------------------- Main --------------------
-int main(int argc, char *argv[])
+// --------------------- Reusable runtime initialization --------------------
+void oplRuntimeInitialize(int argc, char *argv[], int allowAutoLaunch)
 {
 #ifdef __DECI2_DEBUG
     sysInitDECI2();
@@ -2039,11 +2089,17 @@ int main(int argc, char *argv[])
 
     ChangeThreadPriority(GetThreadId(), 31);
 
+#ifdef OPL_EVO
+    gEvolutionBootPath[0] = '\0';
+    if (argc > 0 && argv[0] != NULL)
+        snprintf(gEvolutionBootPath, sizeof(gEvolutionBootPath), "%s", argv[0]);
+#endif
+
     // reset, load modules
     reset();
     ResetDeckardXParams();
 
-    if (argc >= 5) {
+    if (allowAutoLaunch && argc >= 5) {
         /* argv[0] boot path
            argv[1] game->startup
            argv[2] str to u32 game->start_sector
@@ -2062,14 +2118,38 @@ int main(int argc, char *argv[])
 
     init();
 
+#ifdef OPL_EVO_STANDALONE
+    /*
+     * Evolution owns a unified, pre-scanned library.  Do not let a legacy OPL
+     * configuration with usb_mode=Off prevent the standalone frontend from
+     * registering its PS2 BDM backend.  Queue this before deferredInit so the
+     * functional boot screen cannot complete before the initial USB scan.
+     */
+    if (gBDMStartMode != START_MODE_AUTO)
+        gBDMStartMode = START_MODE_AUTO;
+    bdmEnumerateDevices();
+#endif
+
     // until this point in the code is reached, only PREINIT_LOG macro should be used
     LOG_ENABLE();
 
     // queue deffered init which shuts down the intro screen later
     ioPutRequest(IO_CUSTOM_SIMPLEACTION, &deferredInit);
+}
 
+#ifndef OPL_EVO_STANDALONE
+// --------------------- Original OPL application entrypoint --------------------
+int main(int argc, char *argv[])
+{
+    oplRuntimeInitialize(argc, argv, 1);
+
+#ifdef OPL_EVO
+    evoEngineInit();
+    evoUiSetEnabled(1);
+#endif
     guiIntroLoop();
     guiMainLoop();
 
     return 0;
 }
+#endif
