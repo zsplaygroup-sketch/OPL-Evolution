@@ -11,6 +11,9 @@ The current release is **v0.27.0-alpha**. It has been exercised on real PS2
 hardware, but it is not ready to replace a known-good recovery installation.
 Keep Free McBoot, wLaunchELF, and a working OPL ELF available while testing.
 
+[Download v0.27.0-alpha](https://github.com/officialjuicedesigns/OPL-Evolution/releases/tag/v0.27.0-alpha)
+or [report a problem](https://github.com/officialjuicedesigns/OPL-Evolution/issues).
+
 ## Evolution alpha features
 
 - Standalone Evolution boot flow and dashboard

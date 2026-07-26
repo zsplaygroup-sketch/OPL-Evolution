@@ -6,8 +6,10 @@
 - Release: v0.27.0-alpha
 - Status: Unofficial experimental OPL fork
 - License: Academic Free License 3.0
-- Source and download: `[GITHUB RELEASE URL]`
-- Issues and test reports: `[GITHUB ISSUES URL]`
+- Source and download:
+  `https://github.com/officialjuicedesigns/OPL-Evolution/releases/tag/v0.27.0-alpha`
+- Issues and test reports:
+  `https://github.com/officialjuicedesigns/OPL-Evolution/issues`
 
 Never describe OPL Evolution as an official OPL release or as a replacement
 that is ready for every console. Keep the words **unofficial alpha** near the
@@ -59,7 +61,7 @@ Testers should report:
 
 Source, alpha ELF, checksums, installation instructions, and issue tracker:
 
-`[GITHUB RELEASE URL]`
+`https://github.com/officialjuicedesigns/OPL-Evolution/releases/tag/v0.27.0-alpha`
 
 OPL Evolution is derived from Open PS2 Loader and retains its AFL-3.0
 licensing and attribution. The launch transition is adapted from
@@ -79,7 +81,7 @@ different PS2 models and storage devices.
 
 Source, ELF, screenshots, checksums, known issues, and reporting template:
 
-`[GITHUB RELEASE URL]`
+`https://github.com/officialjuicedesigns/OPL-Evolution/releases/tag/v0.27.0-alpha`
 
 ## Forum-title alternatives
 
