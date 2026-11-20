@@ -1,0 +1,59 @@
+name: SD Ceara Games - Compilar Evolution XMB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gerar-elf:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ps2homebrew/ps2homebrew:main
+    timeout-minutes: 45
+    steps:
+      - name: Baixar o fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verificar arquivos e dependencias
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 --version
+          test -f sdceara/tools/aplicar_v04.py
+          test -f sdceara/assets/gfx/evo_boot.png
+          test -f sdceara/assets/gfx/evo_dashboard.png
+      - name: Validar compatibilidade com base oficial
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile sdceara/tools/*.py
+          python3 sdceara/tools/aplicar_v04.py . --verificar
+      - name: Aplicar personalizacao apenas na copia temporaria
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sdceara/tools/aplicar_v04.py .
+          test -f sdceara-edition-v0.4.json
+      - name: Compilar para PlayStation 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make evolution
+          test -s OPL-EVOLUTION.ELF
+          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-TESTE.ELF
+          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-SHA256.txt
+      - name: Entregar ELF experimental e registro de compilacao
+        uses: actions/upload-artifact@v4
+        with:
+          name: SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-TESTE
+          path: |
+            SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-TESTE.ELF
+            SD-CEARA-GAMES-EVOLUTION-XMB-v0.4-SHA256.txt
+            sdceara-edition-v0.4.json
+          if-no-files-found: error
+          retention-days: 30
