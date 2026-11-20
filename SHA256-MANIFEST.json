@@ -1,0 +1,10 @@
+{
+  ".github/workflows/sd-ceara-evolution.yml": "ed478e60780848466a42c3faffc08c4679de19652aed28d46a51d6b9f1936533",
+  "LEIA-ME-PRIMEIRO.md": "572aba555e88390d0c4ba1c016e65f44805be70e352ccfc85d85b208f9b7d14b",
+  "sdceara/assets/gfx/evo_boot.png": "1e8128df4b7531bd674fbc2d7e33007939c240db65999f31a7229bbcf09a8dc2",
+  "sdceara/assets/gfx/evo_dashboard.png": "605f91c5f7e7ff57d708d915576414bae1a25a0652272077d8b89a62fc04a066",
+  "sdceara/tests/teste_v03.py": "f152f35a598283a0113096290548bdf3765b42c3435179464a90fa7edcb24111",
+  "sdceara/tools/aplicar_no_opl_evolution.py": "cce562a2469f192de59c49fbea25d3db51b441ceb725ce90383847303979fc32",
+  "sdceara/tools/aplicar_v04.py": "e94d24fe15d7245beb9d6bbb7567371ce00929209e619a53c509036503e98fe7",
+  "sdceara/tools/gerar_title_cfg.py": "6e1fd74c2e3c2153d7781d9e55db1e13c185fb41354d586ac45de76096f99bc2"
+}
