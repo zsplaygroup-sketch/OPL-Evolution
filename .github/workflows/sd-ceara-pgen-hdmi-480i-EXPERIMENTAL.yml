@@ -1,0 +1,104 @@
+name: SD Ceara Games - PGEN HDMI 480i Experimental
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compilar-pgen-hdmi:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ps2homebrew/ps2homebrew:main
+    timeout-minutes: 45
+    steps:
+      - name: Preparar ferramentas
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p resultado
+          {
+            echo 'PS2DEV='"${PS2DEV:-desconhecido}"
+            echo 'PS2SDK='"${PS2SDK:-desconhecido}"
+            command -v ee-g++ || true
+            command -v ee-gcc || true
+            command -v ps2-packer || true
+          } | tee resultado/ambiente.txt
+
+      - name: Baixar fonte aberto do PGEN
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/ps2homebrew/pgen.git pgen
+          git -C pgen rev-parse HEAD | tee resultado/commit-pgen.txt
+          test -f pgen/ps2/ps2/gfx.cpp
+          test -f pgen/ps2/Makefile
+
+      - name: Aplicar patch experimental PAL-576i e NTSC-480i
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          f=Path('pgen/ps2/ps2/gfx.cpp')
+          old=f.read_text(encoding='latin-1')
+          s=old
+          for fn, mode in [('gfxSetNtsc','NTSC'),('gfxSetPal','PAL')]:
+              pat=rf'(void\s+{fn}\(\)\s*\{{\s*)(dispDriver->setDisplayMode\(320,\s*240,\s*{mode},\s*)NONINTERLACE'
+              s,n=re.subn(pat,lambda m:m.group(1)+m.group(2)+'INTERLACE',s,count=1)
+              if n!=1:
+                  raise SystemExit(f'ERRO: nao foi possivel alterar {fn}. Fonte diferente. Executavel nao sera gerado.')
+          if old==s:
+              raise SystemExit('ERRO: patch nao alterou nada')
+          f.write_text(s,encoding='latin-1')
+          Path('resultado/alteracoes.txt').write_text(
+              'PGEN HDMI EXPERIMENTAL SD CEARA GAMES\n'
+              'Alteracao apenas no PS2 GS: PAL e NTSC NONINTERLACE -> INTERLACE.\n'
+              'Nao altera o motor do emulador nem ROMs ou rotinas de leitura de CD/DVD.\n'
+              'Nao se garante funcionamento 480i/576i em todos os adaptadores.\n'
+              'Testar apenas como alternativa ao PGEN original.\n',encoding='utf-8')
+          print('Patch aplicado em',f)
+          PY
+          grep -A4 'void gfxSetNtsc()' pgen/ps2/ps2/gfx.cpp | tail -4
+          grep -A4 'void gfxSetPal()' pgen/ps2/ps2/gfx.cpp | tail -4
+
+      - name: Compilar PGEN para PS2
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p resultado
+          make -C pgen/ps2 -j1 2>&1 | tee resultado/build.log
+          test -s pgen/ps2/pgen.elf
+          cp pgen/ps2/pgen.elf resultado/PGEN-SD-CEARA-HDMI-480i-EXPERIMENTAL.ELF
+          file resultado/PGEN-SD-CEARA-HDMI-480i-EXPERIMENTAL.ELF | tee resultado/formato.txt
+          sha256sum resultado/PGEN-SD-CEARA-HDMI-480i-EXPERIMENTAL.ELF | tee resultado/SHA256.txt
+
+      - name: Publicar ELF experimental se compilado
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PGEN-SD-CEARA-HDMI-480i-ELF-EXPERIMENTAL
+          path: |
+            resultado/PGEN-SD-CEARA-HDMI-480i-EXPERIMENTAL.ELF
+            resultado/SHA256.txt
+            resultado/alteracoes.txt
+            resultado/commit-pgen.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar diagnostico mesmo se falhar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PGEN-SD-CEARA-HDMI-480i-DIAGNOSTICO
+          path: |
+            resultado/ambiente.txt
+            resultado/build.log
+            resultado/alteracoes.txt
+            resultado/commit-pgen.txt
+            resultado/formato.txt
+          if-no-files-found: ignore
+          retention-days: 30
