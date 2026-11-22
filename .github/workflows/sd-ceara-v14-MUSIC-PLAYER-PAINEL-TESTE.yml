@@ -443,7 +443,7 @@ jobs:
           python3 sdceara/tools/aplicar_music_player_sidebar_v13.py
           grep -q 'NOW PLAYING' src/evo_ui.c
           grep -q 'SDCEARA/MUSIC' src/evo_ui.c
-          test -s sdceara-edition-v1.4.json
+          test -s sdceara-edition-v1.3.json
       - name: Exibir painel musical sem depender do foco v1.4
         shell: bash
         run: |
