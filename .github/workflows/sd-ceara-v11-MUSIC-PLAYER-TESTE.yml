@@ -428,6 +428,14 @@ jobs:
           grep -q 'bgmStop' src/evo_settings.c
           grep -q 'bgmStart' src/evo_settings.c
           test -s sdceara-edition-v1.0.json
+      - name: Aplicar controles reais Music Player v1.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sdceara/tools/aplicar_music_player_v12.py
+          grep -q 'evoMusicPlayerPauseToggle' src/evo_settings.c
+          grep -q 'KEY_TRIANGLE' src/evo_ui.c
+          test -s sdceara-edition-v1.2.json
       - name: Conferir arquivos da leitura de jogos
         shell: bash
         run: |
@@ -453,6 +461,7 @@ jobs:
             sdceara-edition-v0.8.json
             sdceara-edition-v0.9.json
             sdceara-edition-v1.0.json
+            sdceara-edition-v1.2.json
             SDCEARA/bgm.ogg
           if-no-files-found: error
           retention-days: 30
