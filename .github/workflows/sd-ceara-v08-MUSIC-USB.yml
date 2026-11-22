@@ -1,0 +1,445 @@
+name: SD Ceara Games - Evolution XMB v0.8 MUSIC USB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evolution-v08:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ps2homebrew/ps2homebrew:main
+    timeout-minutes: 45
+    steps:
+      - name: Baixar fork em ambiente temporario
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restaurar codigo e arte v0.7 com SHA256
+        shell: bash
+        run: bash .github/workflows/sd-ceara-v09-restaurar-base.sh
+      - name: Validar estrutura e patch sem editar repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile sdceara/tools/aplicar_no_opl_evolution.py sdceara/tools/aplicar_v04.py sdceara/tools/aplicar_v05.py sdceara/tools/aplicar_v06.py sdceara/tools/aplicar_v07.py
+          python3 sdceara/tools/aplicar_v07.py . --verificar
+      - name: Aplicar v0.7 mantendo navegacao e jogos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sdceara/tools/aplicar_v07.py .
+          grep -q 'evoXmbDrawDock' src/evo_ui.c
+          grep -q 'evoXmbSelectTab' src/evo_ui.c
+          grep -q 'evoXmbDrawTechnical' src/evo_ui.c
+          grep -q 'evoXmbTechSettings' src/evo_ui.c
+          grep -q 'evoXmbTechMemory' src/evo_ui.c
+          test -s sdceara-edition-v0.7.json
+      - name: Aplicar marca dagua e musica original v0.8
+        shell: bash
+        run: bash .github/workflows/sd-ceara-v09-marcardagua-rap.sh
+      - name: Registrar arquivos da leitura de jogos apos v0.8
+        shell: bash
+        run: git diff --binary HEAD -- src/supportbase.c src/bdmsupport.c modules Makefile > /tmp/opl-game-core.diff
+      - name: Seletor musical SD Ceara Games v0.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/aplicar_v09.py <<'PY_SDCEARA_V09'
+          #!/usr/bin/env python3
+          """SD Ceara OPL XMB v0.9 music selector. Apply AFTER v0.8 patch, against clean v0.7 source."""
+          from pathlib import Path
+          import re
+
+          def change(path: str, old: str, new: str):
+              p=Path(path)
+              src=p.read_text(encoding='utf-8')
+              count=src.count(old)
+              if count!=1:
+                  raise SystemExit(f'v0.9 patch refused: {path}: match count {count}; expected 1 for {old[:70]!r}')
+              p.write_text(src.replace(old,new),encoding='utf-8')
+
+          path='src/evo_settings.c'
+          change(path, '#include <stdio.h>','#include <stdio.h>\n#include <string.h>')
+          change(path, '    int bgm;\n    int autosort;', '    int bgm;\n    int musicTrack; /* 0 off, 1 original beat, 2 user-supplied song */\n    int autosort;')
+          change(path,'    "Musica rap (BGM)",','    "Trilha sonora",')
+          change(path,'    settings.bgm = gEnableBGM;', '''    settings.bgm = gEnableBGM;
+              /* One tri-state option, so the Settings screen keeps its proven nine rows. */
+              settings.musicTrack = !gEnableBGM ? 0 :
+                                    (strstr(gDefaultBGMPath, "mesmerize.ogg") != NULL ? 2 : 1);''')
+          change(path, '''        case EVO_SETTING_BGM:
+                      settings.bgm = evoSettingsToggle(settings.bgm);
+                      break;''', '''        case EVO_SETTING_BGM:
+                      settings.musicTrack = (settings.musicTrack + (direction < 0 ? 2 : 1)) % 3;
+                      settings.bgm = settings.musicTrack != 0;
+                      break;''')
+          change(path, '''        case EVO_SETTING_BGM:
+                      enabled = settings.bgm;
+                      break;''', '''        case EVO_SETTING_BGM:
+                      snprintf(value, valueSize, "%s",
+                               settings.musicTrack == 2 ? "Mesmerize" :
+                               settings.musicTrack == 1 ? "Rap SD" : "Off");
+                      return;''')
+
+          p=Path(path)
+          s=p.read_text(encoding='utf-8')
+          regex=r'int evoSettingsSave\(void\)\n\{.*?\n\}\n\nvoid evoSettingsDiscard\(void\)'
+          replacement='''int evoSettingsSave(void)
+          {
+              char selectedPath[sizeof(gDefaultBGMPath)];
+              int selectionChanged;
+
+              /* Music remains external to the ELF and OPL game loader. */
+              snprintf(selectedPath, sizeof(selectedPath), "mass0:/SDCEARA/%s",
+                       settings.musicTrack == 2 ? "mesmerize.ogg" : "bgm.ogg");
+              selectionChanged = strcmp(gDefaultBGMPath, selectedPath) != 0;
+
+              /* The existing OPL Vorbis player owns the BGM thread. Stop before switch. */
+              if (isBgmPlaying() && (selectionChanged || !settings.bgm))
+                  bgmStop();
+
+              gEnableArt = settings.artwork;
+              gWideScreen = settings.widescreen;
+              gEnableNotifications = settings.notifications;
+              gEnableSFX = settings.sfx;
+              gEnableBGM = settings.bgm;
+              gAutosort = settings.autosort;
+              gAutoRefresh = settings.autorefresh;
+              gSelectButton = settings.confirmButton;
+              gVMode = settings.videoMode;
+              snprintf(gDefaultBGMPath, sizeof(gDefaultBGMPath), "%s", selectedPath);
+
+              if (gEnableBGM && !isBgmPlaying())
+                  bgmStart();
+
+              return saveConfig(CONFIG_OPL, 0);
+          }
+
+          void evoSettingsDiscard(void)'''
+          s,n=re.subn(regex,replacement,s,flags=re.S)
+          if n != 1:
+              raise SystemExit('v0.9 patch refused: expected exactly one SettingsSave function')
+          p.write_text(s,encoding='utf-8')
+
+          # Keep the footer and horizontal nav as v0.7. Only change the music caption.
+          change('src/evo_ui.c',
+                 '"Sons do menu", "Batida rap (BGM)", "Ordem automatica"',
+                 '"Sons do menu", "Trilha sonora", "Ordem automatica"')
+
+          path='src/sound.c'
+          change(path,'#include <vorbis/vorbisfile.h>', '#include <vorbis/vorbisfile.h>\n#include <string.h>')
+          change(path, '''        static const char *const fallbacks[] = {
+                      "mass0:/SDCEARA/bgm.ogg",
+                      "mass1:/SDCEARA/bgm.ogg",
+                      "mass:/SDCEARA/bgm.ogg"
+                  };
+                  int i;
+                  for (i = 0; i < (int)(sizeof(fallbacks) / sizeof(fallbacks[0])); i++) {
+                      bgmFile = fopen(fallbacks[i], "rb");
+                      if (bgmFile != NULL)
+                          break;
+                  }''', '''        /* Fall back to another USB alias, never a different requested track. */
+                  const char *song = strstr(gDefaultBGMPath, "mesmerize.ogg") != NULL ?
+                                    "mesmerize.ogg" : "bgm.ogg";
+                  static const char *const devices[] = {"mass0:", "mass1:", "mass:"};
+                  char path[256];
+                  int i;
+                  for (i = 0; i < (int)(sizeof(devices) / sizeof(devices[0])); i++) {
+                      snprintf(path, sizeof(path), "%s/SDCEARA/%s", devices[i], song);
+                      bgmFile = fopen(path, "rb");
+                      if (bgmFile != NULL)
+                          break;
+                  }''')
+
+          # Explicitly configured track should take precedence over theme BGM in standalone.
+          change(path, '''    int themeID = thmGetGuiValue();
+              if (themeID != 0) {
+                  char *thmPath = thmGetFilePath(themeID);
+                  snprintf(bgmPath, sizeof(bgmPath), "%ssound/bgm.ogg", thmPath);
+              } else
+                  snprintf(bgmPath, sizeof(bgmPath), gDefaultBGMPath);''', '''    int themeID = thmGetGuiValue();
+          #ifdef OPL_EVO_STANDALONE
+              if (gDefaultBGMPath[0] != '\\0')
+                  snprintf(bgmPath, sizeof(bgmPath), "%s", gDefaultBGMPath);
+              else if (themeID != 0) {
+                  char *thmPath = thmGetFilePath(themeID);
+                  snprintf(bgmPath, sizeof(bgmPath), "%ssound/bgm.ogg", thmPath);
+              } else
+                  bgmPath[0] = '\\0';
+          #else
+              if (themeID != 0) {
+                  char *thmPath = thmGetFilePath(themeID);
+                  snprintf(bgmPath, sizeof(bgmPath), "%ssound/bgm.ogg", thmPath);
+              } else
+                  snprintf(bgmPath, sizeof(bgmPath), gDefaultBGMPath);
+          #endif''')
+
+          Path('sdceara-edition-v0.9.json').write_text('''{"version":"0.9","base":"v0.7 + v0.8","watermark":true,"music_option":"Off | Rap SD | Mesmerize","external_tracks":["SDCEARA/bgm.ogg","SDCEARA/mesmerize.ogg"],"launch_core_unchanged":true}''',encoding='utf-8')
+          print('v0.9: tri-state music selector applied (game loader and navigation unchanged)')
+          PY_SDCEARA_V09
+          python3 /tmp/aplicar_v09.py
+          test -s sdceara-edition-v0.9.json
+
+      - name: Detectar automaticamente MUSIC OGG v1.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/aplicar_v10_music.py <<'PY_SDCEARA_V10'
+          #!/usr/bin/env python3
+          """SD Ceara Games OPL Evolution v1.0: automatic USB OGG music picker.
+          Apply AFTER the verified v0.9 workflow patch. Fail closed if source changed.
+          """
+          from pathlib import Path
+          import re
+          import json
+          
+          def replace_exact(path, old, new, reason):
+              p=Path(path)
+              data=p.read_text(encoding='utf-8')
+              n=data.count(old)
+              if n!=1:
+                  raise SystemExit(f'v1.0 rejected {path} ({reason}): expected 1 anchor, found {n}')
+              p.write_text(data.replace(old,new,1),encoding='utf-8')
+          
+          def replace_regex(path, pattern, replacement, reason):
+              p=Path(path)
+              data=p.read_text(encoding='utf-8')
+              data,n=re.subn(pattern, lambda m: replacement, data, flags=re.S)
+              if n!=1:
+                  raise SystemExit(f'v1.0 rejected {path} ({reason}): expected 1 match, found {n}')
+              p.write_text(data,encoding='utf-8')
+          
+          settings='src/evo_settings.c'
+          replace_exact(settings,'#include <string.h>','#include <string.h>\n#include <strings.h>\n#include <dirent.h>', 'includes')
+          replace_exact(settings,'    int musicTrack; /* 0 off, 1 original beat, 2 user-supplied song */','    int musicTrack; /* 0 off; 1..musicCount USB OGG tracks */', 'music state')
+          
+          music_helpers = r'''/* Scan only when the native Settings screen opens; never on every video frame. */
+          #define EVO_MUSIC_MAX_TRACKS 64
+          #define EVO_MUSIC_NAME_SIZE 96
+          #define EVO_MUSIC_ROOT_SIZE 32
+          
+          static char evoMusicNames[EVO_MUSIC_MAX_TRACKS][EVO_MUSIC_NAME_SIZE];
+          static char evoMusicRoot[EVO_MUSIC_ROOT_SIZE];
+          static int evoMusicCount;
+          
+          static void evoMusicScan(void)
+          {
+              static const char *const roots[] = {
+                  "mass0:/SDCEARA/MUSIC/",
+                  "mass1:/SDCEARA/MUSIC/",
+                  "mass:/SDCEARA/MUSIC/"
+              };
+              int device;
+              evoMusicCount = 0;
+              evoMusicRoot[0] = '\0';
+          
+              for (device = 0; device < 3; ++device) {
+                  DIR *dir = opendir(roots[device]);
+                  struct dirent *entry;
+                  if (dir == NULL)
+                      continue;
+                  while ((entry = readdir(dir)) != NULL) {
+                      const char *name = entry->d_name;
+                      size_t length = strlen(name);
+                      int duplicate = 0;
+                      int i;
+                      if (length < 5 || length >= EVO_MUSIC_NAME_SIZE ||
+                          strcasecmp(name + length - 4, ".ogg") != 0 ||
+                          name[0] == '.' || strchr(name, '/') || strchr(name, '\\'))
+                          continue;
+                      for (i = 0; i < evoMusicCount; ++i) {
+                          if (strcasecmp(evoMusicNames[i], name) == 0) {
+                              duplicate = 1;
+                              break;
+                          }
+                      }
+                      if (!duplicate && evoMusicCount < EVO_MUSIC_MAX_TRACKS) {
+                          memcpy(evoMusicNames[evoMusicCount], name, length + 1);
+                          ++evoMusicCount;
+                      }
+                  }
+                  closedir(dir);
+                  if (evoMusicCount > 0) {
+                      snprintf(evoMusicRoot, sizeof(evoMusicRoot), "%s", roots[device]);
+                      break;
+                  }
+              }
+          
+              /* Stable alphabetical ordering, independent of FAT directory order. */
+              {
+                  int i, j;
+                  for (i = 1; i < evoMusicCount; ++i) {
+                      char current[EVO_MUSIC_NAME_SIZE];
+                      memcpy(current, evoMusicNames[i], sizeof(current));
+                      j = i;
+                      while (j > 0 && strcasecmp(evoMusicNames[j - 1], current) > 0) {
+                          memcpy(evoMusicNames[j], evoMusicNames[j - 1],
+                                 sizeof(evoMusicNames[j]));
+                          --j;
+                      }
+                      memcpy(evoMusicNames[j], current, sizeof(current));
+                  }
+              }
+          }
+          
+          static int evoMusicSavedIndex(void)
+          {
+              const char *name = strrchr(gDefaultBGMPath, '/');
+              int i;
+              if (!gEnableBGM || name == NULL || evoMusicCount == 0)
+                  return 0;
+              ++name;
+              for (i = 0; i < evoMusicCount; ++i) {
+                  if (strcasecmp(evoMusicNames[i], name) == 0)
+                      return i + 1;
+              }
+              return 0;
+          }
+          
+          '''
+          replace_exact(settings,'static int settingsSelection;\n','static int settingsSelection;\n\n'+music_helpers, 'music scan helpers')
+          replace_regex(settings,
+              r'    settings\.bgm = gEnableBGM;\n    /\* One tri-state option, so the Settings screen keeps its proven nine rows\. \*/\n    settings\.musicTrack = !gEnableBGM \? 0 :\n\s*\(strstr\(gDefaultBGMPath, "mesmerize\.ogg"\) != NULL \? 2 : 1\);',
+              '''    evoMusicScan();
+              settings.musicTrack = evoMusicSavedIndex();
+              settings.bgm = settings.musicTrack != 0;''',
+              'initialize music scan')
+          replace_exact(settings,
+              '            settings.musicTrack = (settings.musicTrack + (direction < 0 ? 2 : 1)) % 3;\n            settings.bgm = settings.musicTrack != 0;',
+              '            if (evoMusicCount > 0) {\n                int total = evoMusicCount + 1;\n                settings.musicTrack = (settings.musicTrack +\n                    (direction < 0 ? total - 1 : 1)) % total;\n            } else {\n                settings.musicTrack = 0;\n            }\n            settings.bgm = settings.musicTrack != 0;',
+              'cycle dynamic tracks')
+          replace_exact(settings,
+          '''            snprintf(value, valueSize, "%s",
+                               settings.musicTrack == 2 ? "Mesmerize" :
+                               settings.musicTrack == 1 ? "Rap SD" : "Off");
+                      return;''',
+          '''            if (evoMusicCount == 0) {
+                          snprintf(value, valueSize, "Off");
+                      } else if (settings.musicTrack == 0) {
+                          snprintf(value, valueSize, "Off");
+                      } else {
+                          const char *name = evoMusicNames[settings.musicTrack - 1];
+                          size_t n = strlen(name);
+                          size_t copyLen = n >= 4 ? n - 4 : n;
+                          if (copyLen >= valueSize)
+                              copyLen = valueSize - 1;
+                          memcpy(value, name, copyLen);
+                          value[copyLen] = '\\0';
+                      }
+                      return;''',
+              'display selected OGG file')
+          
+          replace_regex(settings,
+              r'int evoSettingsSave\(void\)\n\{.*?\n\}\n\nvoid evoSettingsDiscard\(void\)',
+          '''int evoSettingsSave(void)
+          {
+              char selectedPath[sizeof(gDefaultBGMPath)];
+              int wantedBgm = (settings.musicTrack > 0 &&
+                               settings.musicTrack <= evoMusicCount &&
+                               evoMusicRoot[0] != '\\0');
+              int selectionChanged;
+              selectedPath[0] = '\\0';
+              if (wantedBgm) {
+                  snprintf(selectedPath, sizeof(selectedPath), "%s%s", evoMusicRoot,
+                           evoMusicNames[settings.musicTrack - 1]);
+              }
+              selectionChanged = strcmp(gDefaultBGMPath, selectedPath) != 0;
+          
+              /* Stop the Vorbis stream before switching OGG files. */
+              if (isBgmPlaying() && (selectionChanged || !wantedBgm))
+                  bgmStop();
+          
+              gEnableArt = settings.artwork;
+              gWideScreen = settings.widescreen;
+              gEnableNotifications = settings.notifications;
+              gEnableSFX = settings.sfx;
+              gEnableBGM = wantedBgm;
+              gAutosort = settings.autosort;
+              gAutoRefresh = settings.autorefresh;
+              gSelectButton = settings.confirmButton;
+              gVMode = settings.videoMode;
+              snprintf(gDefaultBGMPath, sizeof(gDefaultBGMPath), "%s", selectedPath);
+          
+              if (gEnableBGM && !isBgmPlaying())
+                  bgmStart();
+          
+              return saveConfig(CONFIG_OPL, 0);
+          }
+          
+          void evoSettingsDiscard(void)''',
+              'persist and immediately play selection')
+          
+          # The v0.9 fallback assumed only two hardcoded tracks. Keep the selected
+          # filename across mass0/mass1 alias changes; never fall back to a different tune.
+          sound='src/sound.c'
+          replace_regex(sound,
+              r'        /\* Fall back to another USB alias, never a different requested track\. \*/\n.*?        }\n(?=    }\n#endif)',
+          '''        /* Try the same track on USB aliases, not a different song. */
+                  const char *song = strrchr(bgmPath, '/');
+                  const char *roots[] = {
+                      "mass0:/SDCEARA/MUSIC/",
+                      "mass1:/SDCEARA/MUSIC/",
+                      "mass:/SDCEARA/MUSIC/"
+                  };
+                  char path[256];
+                  int i;
+                  song = song ? song + 1 : "";
+                  if (song[0] != '\\0' && strlen(song) < EVO_SONG_MAX_NAME) {
+                      for (i = 0; i < (int)(sizeof(roots) / sizeof(roots[0])); ++i) {
+                          snprintf(path, sizeof(path), "%s%s", roots[i], song);
+                          bgmFile = fopen(path, "rb");
+                          if (bgmFile != NULL)
+                              break;
+                      }
+                  }
+          ''',
+              'same-song USB fallback')
+          # Compile-time safety: name length bounded for selected tracks.
+          replace_exact(sound,'#include <string.h>', '#include <string.h>\n#define EVO_SONG_MAX_NAME 96', 'fallback max name')
+          
+          Path('sdceara-edition-v1.0.json').write_text(json.dumps({
+              'version':'1.0',
+              'base':'v0.9',
+              'music_folder':'SDCEARA/MUSIC',
+              'max_tracks':64,
+              'music_formats':['.ogg'],
+              'music_selection':'Off + sorted USB OGG files',
+              'music_persistence':'OPL config path',
+              'game_loader_unchanged':True,
+              'horizontal_navigation_unchanged':True,
+          },indent=2), encoding='utf-8')
+          print('v1.0: USB OGG music directory scan, selector and playback patch applied')
+          PY_SDCEARA_V10
+          python3 -m py_compile /tmp/aplicar_v10_music.py
+          python3 /tmp/aplicar_v10_music.py
+          grep -q "EVO_MUSIC_MAX_TRACKS 64" src/evo_settings.c
+          grep -q "musicTrack <= evoMusicCount" src/evo_settings.c
+          test -s sdceara-edition-v1.0.json
+      - name: Conferir arquivos da leitura de jogos
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --binary HEAD -- src/supportbase.c src/bdmsupport.c modules Makefile | cmp /tmp/opl-game-core.diff -
+      - name: Compilar ELF v0.8 para PlayStation 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean
+          make evolution
+          test -s OPL-EVOLUTION.ELF
+          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-TESTE.ELF
+          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-SHA256.txt
+      - name: Publicar ELF experimental v0.8
+        uses: actions/upload-artifact@v4
+        with:
+          name: SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-TESTE
+          path: |
+            SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-TESTE.ELF
+            SD-CEARA-GAMES-EVOLUTION-XMB-v0.8-MUSIC-USB-SHA256.txt
+            sdceara-edition-v0.7.json
+            sdceara-edition-v0.8.json
+            SDCEARA/bgm.ogg
+          if-no-files-found: error
+          retention-days: 30
