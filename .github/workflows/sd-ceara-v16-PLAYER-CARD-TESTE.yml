@@ -435,7 +435,7 @@ jobs:
           python3 sdceara/tools/aplicar_music_player_xmb_v15.py
           grep -q 'MUSIC PLAYER V1.5' src/evo_ui.c
           grep -q 'static void evoXmbTechSettings(void)' src/evo_ui.c
-          test -s sdceara-edition-v1.6.json
+          test -s sdceara-edition-v1.5.json
       - name: Substituir conteudo do card lateral sem sobreposicao
         shell: bash
         run: |
