@@ -435,7 +435,7 @@ jobs:
           python3 sdceara/tools/aplicar_music_player_v12.py
           grep -q 'evoMusicPlayerPauseToggle' src/evo_settings.c
           grep -q 'KEY_TRIANGLE' src/evo_ui.c
-          test -s sdceara-edition-v1.3.json
+          test -s sdceara-edition-v1.2.json
       - name: Integrar Music Player ao painel direito XMB v1.3
         shell: bash
         run: |
