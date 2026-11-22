@@ -39,7 +39,7 @@ s=s.replace(anchor,func+anchor,1)
 p.write_text(s)
 p=Path("src/evo_ui.c")
 s=p.read_text()
-anchor="    if (getKeyOn(KEY_START)) {\n        evoSection = EVO_HOME;"
+anchor="    if (evoFocus == EVO_FOCUS_NAV) {"
 assert s.count(anchor)==1
 handler="""    /* Keep the library's existing L1/R1 category navigation untouched.
      * Everywhere else, including the selected music card, switch OGG. */
