@@ -456,6 +456,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 sdceara/tools/aplicar_controles_audio_v18.py
+          python3 sdceara/tools/aplicar_mx4sio_inicio_v18.py .
           grep -q 'STATUS DOS CONTROLES' src/evo_ui.c
           grep -q 'Exactly one inSema slot' src/sound.c
           test -s sdceara-edition-v1.8.json
