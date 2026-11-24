@@ -1,4 +1,4 @@
-name: SD Ceara Games - Evolution XMB v1.8 MX4SIO + IGR TESTE
+name: SD Ceara Games - Evolution XMB v1.8 ISO ZSO + IGR TESTE
 
 on:
   workflow_dispatch:
@@ -482,6 +482,13 @@ jobs:
         run: |
           set -euo pipefail
           git diff --binary HEAD -- src/supportbase.c src/bdmsupport.c modules Makefile | cmp /tmp/opl-game-core.diff -
+      - name: Corrigir regressao de cache ISO ZSO e retorno IGR no launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sdceara/tools/corrigir_iso_zso_igr_teste.py
+          grep -q 'cache->games\[j\].name' src/supportbase.c
+          grep -q 'mc0:/APPS/OPNPS2LD.ELF' src/system.c
       - name: Compilar ELF v1.8 para PlayStation 2
         shell: bash
         run: |
@@ -489,14 +496,14 @@ jobs:
           make clean
           make evolution
           test -s OPL-EVOLUTION.ELF
-          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF
-          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
+          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-ISO-ZSO-IGR-TESTE.ELF
+          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-ISO-ZSO-IGR-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
       - name: Publicar ELF experimental v1.8
         uses: actions/upload-artifact@v4
         with:
-          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE
+          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-ISO-ZSO-IGR-TESTE
           path: |
-            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF
+            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-ISO-ZSO-IGR-TESTE.ELF
             SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
             sdceara-edition-v0.7.json
             sdceara-edition-v0.8.json
