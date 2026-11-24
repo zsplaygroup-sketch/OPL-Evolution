@@ -1,4 +1,4 @@
-name: SD Ceara Games - Evolution XMB v1.8 PAINEL XMB REAL TESTE
+name: SD Ceara Games - Evolution XMB v1.8 MX4SIO + IGR TESTE
 
 on:
   workflow_dispatch:
@@ -471,6 +471,12 @@ jobs:
           grep -q 'evoMx4sioNotice' src/evo_ui.c
           grep -q 'MX4SIO: LIGADO' src/evo_ui.c
           grep -q 'MX4SIO: DESLIGADO' src/evo_ui.c
+      - name: Configurar caminho de retorno IGR para o OPL instalado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 sdceara/tools/aplicar_igr_caminho_v18.py
+          grep -q 'mc0:/APPS/OPNPS2LD.ELF' src/opl.c
       - name: Conferir arquivos da leitura de jogos
         shell: bash
         run: |
@@ -483,14 +489,14 @@ jobs:
           make clean
           make evolution
           test -s OPL-EVOLUTION.ELF
-          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE.ELF
-          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
+          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF
+          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
       - name: Publicar ELF experimental v1.8
         uses: actions/upload-artifact@v4
         with:
-          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE
+          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE
           path: |
-            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE.ELF
+            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-IGR-TESTE.ELF
             SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-SHA256.txt
             sdceara-edition-v0.7.json
             sdceara-edition-v0.8.json
@@ -501,31 +507,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publicar ELF final aprovado para instalador FunTuna
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          apk add --no-cache github-cli || true
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib
-          p=Path('SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE.ELF')
-          expected='3319d825d79d68623ddde054f51b2ac616e57c5dcb2d44be753296109e8867c8'
-          actual=hashlib.sha256(p.read_bytes()).hexdigest()
-          print('ELF SHA256:',actual)
-          if actual!=expected:
-              raise SystemExit('ERRO: ELF difere do arquivo aprovado. Release cancelado.')
-          p.rename('SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF')
-          PY
-          if command -v gh >/dev/null 2>&1; then
-            gh release create v1.8-mx4sio-final \
-              SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF \
-              --target "$GITHUB_SHA" \
-              --title "SD Ceara Games Evolution XMB v1.8 MX4SIO Final" \
-              --notes "OPL v1.8 MX4SIO aprovado e validado por SHA-256."
-          else
-            echo "ERRO: gh CLI indisponivel"
-            exit 1
-          fi
