@@ -1,0 +1,51 @@
+name: SD Ceara Games - Publicar OPL v1.8 MX4SIO validado
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout da versao MX4SIO
+        uses: actions/checkout@v4
+      - name: Recuperar ELF da compilacao aprovada
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -H "Accept: application/vnd.github+json" \
+            /repos/zsplaygroup-sketch/OPL-Evolution/actions/artifacts/14944682609/zip > /tmp/opl-artifact.zip
+          mkdir -p /tmp/opl-artifact
+          unzip -q /tmp/opl-artifact.zip -d /tmp/opl-artifact
+          find /tmp/opl-artifact -maxdepth 2 -type f -print
+          ELF=$(find /tmp/opl-artifact -type f -name '*.ELF' -print -quit)
+          test -n "$ELF"
+          cp "$ELF" SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF')
+          data=p.read_bytes()
+          actual=hashlib.sha256(data).hexdigest()
+          expected='3319d825d79d68623ddde054f51b2ac616e57c5dcb2d44be753296109e8867c8'
+          print('ELF SHA256:',actual)
+          if actual!=expected:
+              raise SystemExit('ELF difere do arquivo aprovado pelo usuario. Nao publicar.')
+          if data[:4]!=b'\x7fELF':
+              raise SystemExit('Arquivo nao e ELF')
+          PY
+      - name: Publicar versao final sem modificar release estavel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v1.8-mx4sio-final \
+            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF \
+            --target "$GITHUB_SHA" \
+            --title "SD Ceara Games Evolution XMB v1.8 MX4SIO Final" \
+            --notes "OPL v1.8 MX4SIO validado por SHA-256 para integracao no instalador FunTuna V1." \
+            --verify-tag
