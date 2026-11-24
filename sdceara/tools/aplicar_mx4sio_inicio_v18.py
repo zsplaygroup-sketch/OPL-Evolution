@@ -8,7 +8,7 @@ import sys
 root = Path(sys.argv[1] if len(sys.argv)>1 else '.')
 p = root / 'src/evo_ui.c'
 s = p.read_text(encoding='utf-8')
-if 'MX4SIO: %s' in s and 'evoMx4sioNotice' in s:
+if 'MX4SIO: LIGADO' in s and 'evoMx4sioNotice' in s:
     print('Patch MX4SIO ja aplicado.'); sys.exit(0)
 
 def replace_once(old, new, label):
@@ -55,5 +55,23 @@ replace_once('''    if (evoSection == EVO_LIBRARY) {
         }
     } else if (evoSection == EVO_LIBRARY) {
         if (getKeyOn(KEY_L1)) {''','controles da aba Inicio')
+# XMB real: a aba Inicio e desenhada por evoXmbDrawHero(), nao evoDrawHome().
+# Falhar explicitamente se o trecho esperado nao existir para evitar ELF sem mudanca visivel.
+replace_once('''        evoDrawSmallText(440, 215, 164, "SEU BAIRRO JOGA AQUI", evoColWhite);
+        return;''',
+'''        evoDrawSmallText(440, 215, 164, "SEU BAIRRO JOGA AQUI", evoColWhite);
+        evoDrawFittedText(EVO_MAIN_FONT, 35, 295, 360, 24,
+                          gEnableMX4SIO ? "MX4SIO: LIGADO" : "MX4SIO: DESLIGADO",
+                          gEnableMX4SIO ? evoColGreen : evoColWhite);
+        evoDrawSmallText(35, 322, 360,
+                         "Confirmar: alternar  |  Quadrado: salvar", evoColMuted);
+        evoDrawSmallText(440, 254, 164,
+                         gEnableMX4SIO ? "MX4SIO ATIVO" : "MX4SIO INATIVO",
+                         gEnableMX4SIO ? evoColGreen : evoColMuted);
+        evoDrawSmallText(35, 345, 365, evoMx4sioNotice, evoColMuted);
+        return;''', 'MX4SIO na tela Inicio XMB real')
+if 'MX4SIO: LIGADO' not in s:
+    raise RuntimeError('Marcador da tela XMB real ausente apos o patch')
+
 p.write_text(s, encoding='utf-8')
 print('OK: src/evo_ui.c atualizado; MX4SIO ON/OFF na aba Inicio, salvar com Quadrado.')
