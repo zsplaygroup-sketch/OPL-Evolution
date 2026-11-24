@@ -47,5 +47,4 @@ jobs:
             SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF \
             --target "$GITHUB_SHA" \
             --title "SD Ceara Games Evolution XMB v1.8 MX4SIO Final" \
-            --notes "OPL v1.8 MX4SIO validado por SHA-256 para integracao no instalador FunTuna V1." \
-            --verify-tag
+            --notes "OPL v1.8 MX4SIO validado por SHA-256 para integracao no instalador FunTuna V1."
