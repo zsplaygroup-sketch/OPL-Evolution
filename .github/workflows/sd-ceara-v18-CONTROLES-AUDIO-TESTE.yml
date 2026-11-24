@@ -6,7 +6,7 @@ on:
     branches: [sd-ceara-v18-diagnostico]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   evolution-v12:
@@ -500,3 +500,32 @@ jobs:
             SDCEARA/bgm.ogg
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publicar ELF final aprovado para instalador FunTuna
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk add --no-cache github-cli || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-TESTE.ELF')
+          expected='3319d825d79d68623ddde054f51b2ac616e57c5dcb2d44be753296109e8867c8'
+          actual=hashlib.sha256(p.read_bytes()).hexdigest()
+          print('ELF SHA256:',actual)
+          if actual!=expected:
+              raise SystemExit('ERRO: ELF difere do arquivo aprovado. Release cancelado.')
+          p.rename('SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF')
+          PY
+          if command -v gh >/dev/null 2>&1; then
+            gh release create v1.8-mx4sio-final \
+              SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MX4SIO-FINAL.ELF \
+              --target "$GITHUB_SHA" \
+              --title "SD Ceara Games Evolution XMB v1.8 MX4SIO Final" \
+              --notes "OPL v1.8 MX4SIO aprovado e validado por SHA-256."
+          else
+            echo "ERRO: gh CLI indisponivel"
+            exit 1
+          fi
