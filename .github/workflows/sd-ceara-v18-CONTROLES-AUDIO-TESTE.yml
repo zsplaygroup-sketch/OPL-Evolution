@@ -2,6 +2,8 @@ name: SD Ceara Games - Evolution XMB v1.8 PAINEL XMB REAL TESTE
 
 on:
   workflow_dispatch:
+  push:
+    branches: [sd-ceara-v18-diagnostico]
 
 permissions:
   contents: read
@@ -459,6 +461,8 @@ jobs:
           grep -q 'STATUS DOS CONTROLES' src/evo_ui.c
           grep -q 'Exactly one inSema slot' src/sound.c
           test -s sdceara-edition-v1.8.json
+      - name: Ajustar a tela de diagnostico do SELECT
+        run: python3 sdceara/tools/aplicar_diagnostico_v18.py
       - name: Conferir arquivos da leitura de jogos
         shell: bash
         run: |
@@ -471,15 +475,15 @@ jobs:
           make clean
           make evolution
           test -s OPL-EVOLUTION.ELF
-          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-TESTE.ELF
-          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-SHA256.txt
+          cp OPL-EVOLUTION.ELF SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-TESTE.ELF
+          sha256sum SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-TESTE.ELF > SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-SHA256.txt
       - name: Publicar ELF experimental v1.8
         uses: actions/upload-artifact@v4
         with:
-          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-TESTE
+          name: SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-TESTE
           path: |
-            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-TESTE.ELF
-            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-MUSIC-PLAYER-SHA256.txt
+            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-TESTE.ELF
+            SD-CEARA-GAMES-EVOLUTION-XMB-v1.8-DIAGNOSTICO-SHA256.txt
             sdceara-edition-v0.7.json
             sdceara-edition-v0.8.json
             sdceara-edition-v0.9.json
