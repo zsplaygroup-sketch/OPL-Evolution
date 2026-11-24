@@ -469,6 +469,8 @@ jobs:
           set -euo pipefail
           python3 sdceara/tools/aplicar_mx4sio_inicio_v18.py .
           grep -q 'evoMx4sioNotice' src/evo_ui.c
+          grep -q 'MX4SIO: LIGADO' src/evo_ui.c
+          grep -q 'MX4SIO: DESLIGADO' src/evo_ui.c
       - name: Conferir arquivos da leitura de jogos
         shell: bash
         run: |
